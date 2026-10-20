@@ -1,8 +1,9 @@
 /** Lumina Pipeline — Facade */
 import { detection } from "./detection";
 import { ocr } from "./ocr";
-import { translate } from "./translate";
 import { inpaint } from "./inpaint";
+import { state } from "../state";
+import { canvas } from "../canvas/index";
 
 /* ── Pipeline Presets ── */
 
@@ -44,25 +45,24 @@ export const pipeline = {
   runDetection: detection.run,
   runDetectionAll: detection.runAll,
   runOcr: ocr.run,
-  runTranslate: translate.run,
   runInpaint: inpaint.run,
   async runAll(): Promise<void> {
     await detection.run();
     await ocr.run();
-    await translate.run();
     await inpaint.run();
   },
   /** Run the given preset by id. */
   async runPreset(id: PresetId): Promise<void> {
-    if (id === "clean") {
-      await detection.run();
-      await inpaint.run();
-    } else {
-      // "full"
+    try {
       await detection.run();
       await ocr.run();
-      await translate.run();
       await inpaint.run();
+    } finally {
+      if (id === "clean") {
+        state.showDetBoxes = false;
+        canvas.updateBoxToggle();
+        canvas.render();
+      }
     }
   },
 };

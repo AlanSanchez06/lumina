@@ -187,7 +187,7 @@ export const translationTab = {
         "tr-gemini-model",
         "text",
         i18n.t("settings.trGeminiModel"),
-        "gemini-2.0-flash",
+        "gemini-2.5-flash",
       ),
     );
     pane.appendChild(geminiOpts);

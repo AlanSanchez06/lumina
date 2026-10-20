@@ -50,6 +50,7 @@ export const IPC = {
 
   // Export
   exportImages: "export-images",
+  exportOcrText: "export-ocr-text",
 
   // Save as PSD
   showSaveDialog: "show-save-dialog",

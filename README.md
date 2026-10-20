@@ -169,15 +169,15 @@ Translation is the only step that calls an external AI API — everything else (
 
 Lumina uses ONNX Runtime with GPU support where available.
 
-- **One execution provider per environment.** The DirectML and CUDA wheels cannot coexist in a single Python environment. Two installers ship, one per provider: the universal DirectML installer and the NVIDIA-only CUDA installer (see [Installers](#installers)).
+- **One execution provider per environment.** The DirectML and CUDA wheels cannot coexist in a single Python environment. The DirectML installer is the shareable, universal Windows build for compatible NVIDIA, AMD, and Intel GPUs, with CPU fallback; the NVIDIA-only CUDA installer is an optional performance build (see [Installers](#installers)).
 - **`LUMINA_EP` environment variable** overrides the runtime preference: `auto` (CUDA → DirectML → CPU, falling back per wheel), `cuda` (CUDA, falling back to CPU — never DirectML), `dml`, or `cpu`.
 - **Per-model preferences** are baked into each model's configuration. Some models cannot run on certain providers: `lama` is CPU-only (GPU acceleration is ignored when enabled), `lama_manga` and `paddleocr_vl` never use DirectML (CUDA when available, otherwise CPU), and some OCR models keep their autoregressive decoder on CPU regardless of the chosen provider.
 
 ## Installers
 
-Two Windows installers ship, one per execution provider:
+Two Windows installers ship. For sharing the app across different computers, use the DirectML installer; it supports compatible NVIDIA, AMD, and Intel DirectX 12 GPUs and automatically falls back to CPU when GPU acceleration is unavailable. The CUDA installer is an optional NVIDIA-specific build:
 
-- **`Lumina-Setup-DML-<version>.exe`** — DirectML (CPU + DirectML), universal: runs on any DirectX 12 GPU — including NVIDIA — and falls back to CPU on machines without a compatible GPU. Choose this if you don't have an NVIDIA RTX/GTX card.
+- **`Lumina-Setup-DML-<version>.exe`** — DirectML (CPU + DirectML), universal: runs on compatible DirectX 12 GPUs — including NVIDIA, AMD, and Intel — and falls back to CPU on machines without a compatible GPU.
 - **`Lumina-Setup-CUDA-<version>.exe`** — CUDA 12, NVIDIA-only. **Highly recommended over the DML installer if you have an NVIDIA RTX/GTX card** — it's noticeably faster. Requires an NVIDIA GPU with a reasonably recent driver.
 
 Both are published as a release on the [Releases](https://github.com/lumina-tl/lumina/releases) page, together with their update feed files. Each variant uses its own update channel, so a DML install only ever updates from DML artifacts and a CUDA install only from CUDA artifacts. Updates are differential — the app downloads only the parts that changed, not the whole installer — and install on launch, so a one-time install is usually all that's needed. Release notes are taken from the matching `## [<version>]` section in [CHANGELOG.md](CHANGELOG.md); if that section is missing, notes are generated from the commits.

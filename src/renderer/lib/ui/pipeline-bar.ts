@@ -11,7 +11,6 @@ import {
   PRESETS,
   type PresetId,
 } from "../pipeline";
-import { translateSettings } from "../pipeline/translate";
 import { settings } from "../settings/index";
 import { state } from "../state";
 import { canvas } from "../canvas/index";
@@ -254,7 +253,7 @@ function _togglePresetDropdown(btn: HTMLElement): void {
 
 /** Render and toggle dropdown popover */
 function _toggleDropdown(
-  kind: "detect" | "ocr" | "translate" | "inpaint",
+  kind: "detect" | "ocr" | "inpaint",
   btn: HTMLElement,
 ): void {
   const dropdown = document.getElementById(`dropdown-${kind}`);
@@ -270,20 +269,13 @@ function _toggleDropdown(
   btn.classList.add("active");
   dropdown.classList.remove("hidden");
 
-  if (kind === "translate") {
-    _renderTranslateDropdown(dropdown);
-  } else {
-    _renderModelDropdown(kind, dropdown);
-  }
+  _renderModelDropdown(kind, dropdown);
 
   createIcons({ root: dropdown });
 }
 
-/** Render Model Picker Dropdown (Detect, OCR, Inpaint) */
-function _renderModelDropdown(
-  kind: "detect" | "ocr" | "inpaint",
-  root: HTMLElement,
-): void {
+/** Render model picker dropdown. */
+function _renderModelDropdown(kind: "detect" | "ocr" | "inpaint", root: HTMLElement): void {
   const list = models.list().filter((m) => m.kind === kind);
   const current = models.selectedModel(kind);
   const recId = RECOMMENDED[kind] || "";
@@ -367,82 +359,6 @@ function _renderModelDropdown(
     });
 }
 
-/** Render Translation Provider Dropdown */
-function _renderTranslateDropdown(root: HTMLElement): void {
-  const cfg = translateSettings.load();
-  const currentProvider = cfg.provider || "gemini";
-
-  const providers = [
-    {
-      id: "gemini",
-      name: "Google Gemini",
-      sub: cfg.geminiModel || "gemini-2.0-flash",
-    },
-    {
-      id: "openrouter",
-      name: "OpenRouter",
-      sub: cfg.openrouterModel || "openai/gpt-4o-mini",
-    },
-    { id: "grok", name: "xAI Grok", sub: cfg.grokModel || "grok-3" },
-    {
-      id: "custom",
-      name: "Custom LLM",
-      sub: cfg.llmModel || "openai-compatible",
-    },
-  ];
-
-  let html = `<div class="pipeline-dropdown-header">
-    <span>${_esc(i18n.t("translate.provider") || "Translation Provider")}</span>
-  </div>
-  <div class="pipeline-dropdown-list">`;
-
-  for (const p of providers) {
-    const isSelected = p.id === currentProvider;
-    html += `
-      <div class="pipeline-dropdown-item ${isSelected ? "selected" : ""}" data-provider-id="${_esc(p.id)}">
-        <div class="pipeline-item-check">
-          ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-lumina"></i>' : ""}
-        </div>
-        <div class="pipeline-item-name">${_esc(p.name)}</div>
-      </div>
-    `;
-  }
-
-  html += `</div>
-  <div class="pipeline-dropdown-footer">
-    <button class="pipeline-dropdown-link" id="link-open-trans-settings">
-      <i data-lucide="settings" class="w-3 h-3"></i>
-      <span>Translation Settings...</span>
-    </button>
-  </div>`;
-
-  root.innerHTML = html;
-
-  root.querySelectorAll(".pipeline-dropdown-item").forEach((item) => {
-    item.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const providerId = item.getAttribute("data-provider-id") as
-        | "gemini"
-        | "openrouter"
-        | "grok"
-        | "custom";
-      if (providerId) {
-        cfg.provider = providerId;
-        translateSettings.save(cfg);
-        _closeDropdowns();
-      }
-    });
-  });
-
-  root
-    .querySelector("#link-open-trans-settings")
-    ?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      _closeDropdowns();
-      settings.open("translate");
-    });
-}
-
 /** Wire auto-hide / dimming when user interacts with canvas */
 function _initAutoHide(): void {
   const canvasContainer = document.getElementById("canvas-container");
@@ -515,10 +431,9 @@ export const pipelineBar = {
     });
 
     // Model dropdown triggers
-    const kinds: Array<"detect" | "ocr" | "translate" | "inpaint"> = [
+    const kinds: Array<"detect" | "ocr" | "inpaint"> = [
       "detect",
       "ocr",
-      "translate",
       "inpaint",
     ];
     kinds.forEach((k) => {

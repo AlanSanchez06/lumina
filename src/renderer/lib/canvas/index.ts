@@ -31,6 +31,7 @@ export interface CanvasAPI {
   expandLayer(id: string | null): void;
   setLayerText(id: string, field: "source" | "translation", text: string): void;
   toggleLayerVisible(id: string): void;
+  toggleAllDialogues(): void;
   deleteLayer(id: string): void;
   /** Insert layer `id` before `insertAt` (clamped to its type group) */
   moveLayerTo(id: string, insertAt: number): void;
@@ -108,6 +109,7 @@ export const canvas: CanvasAPI = {
   expandLayer() {},
   setLayerText() {},
   toggleLayerVisible() {},
+  toggleAllDialogues() {},
   deleteLayer() {},
   moveLayerTo() {},
   toggleMaskVisible() {},
