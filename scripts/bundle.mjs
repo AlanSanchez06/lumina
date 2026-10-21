@@ -14,7 +14,7 @@
  * CUDA additionally produces release artifacts (NOT inside the installer —
  * keeping the setup small so app updates stay differential):
  *   build/cuda-runtime.7z    FULL onnxruntime-gpu + nvidia/* runtime
- *                            (LZMA2 -mx=9, multi-threaded)
+ *                            (LZMA2 -mx=5, multi-threaded)
  *   build/cuda-runtime.json  { version, url, sha512 } manifest the app
  *                            fetches at first run to verify + extract
  *
@@ -261,7 +261,7 @@ function downloadOrtWheels(variant) {
  * Build the CUDA runtime as a standalone release artifact — NOT installer
  * content. Keeps the setup small so app updates stay differential.
  *
- *   build/cuda-runtime.7z    onnxruntime-gpu + nvidia/* (LZMA2 -mx=9)
+ *   build/cuda-runtime.7z    onnxruntime-gpu + nvidia/* (LZMA2 -mx=5)
  *   build/cuda-runtime.json  { version, url, sha512 } manifest
  *
  * The app downloads it once into userData on first run, verifies sha512
@@ -269,8 +269,8 @@ function downloadOrtWheels(variant) {
  * then starts the backend against userData/runtime/cuda.
  *
  * Wheels are unpacked with bsdtar (7zr only reads 7z), then compressed with
- * the bundled 7zr.exe: multi-threaded LZMA2 with % progress (bsdtar's tar -a
- * is single-threaded and silent on a ~2.4GB payload). */
+ * the bundled 7zr.exe: normal-level multi-threaded LZMA2 with progress
+ * (bsdtar's tar -a is single-threaded and silent on a ~2.4GB payload). */
 async function archiveOrtCuda(wheelDir, ortRoot) {
   const wheels = listWheels(wheelDir).filter((w) =>
     w.startsWith("onnxruntime"),
@@ -293,13 +293,15 @@ async function archiveOrtCuda(wheelDir, ortRoot) {
     console.log(`  nvidia: extracting ${w}`);
     extractZip(path.join(wheelDir, w), ortRoot);
   }
-  // 3. 7z the whole ortRoot (LZMA2 max, multi-threaded), then delete it
+  // 3. 7z the whole ortRoot (LZMA2 normal, multi-threaded), then delete it
   const archive = path.join(BUILD, "cuda-runtime.7z");
   rmSync(archive, { force: true });
   console.log(
-    "  7z: compressing cuda-runtime.7z (LZMA2 -mx=9, multi-threaded)...",
+    "  7z: compressing cuda-runtime.7z (LZMA2 -mx=5, multi-threaded)...",
   );
-  run(["a", "-t7z", "-mx=9", archive, "."], { cwd: ortRoot });
+  run(["a", "-t7z", "-mx=5", "-mmt", "-bsp1", archive, "."], {
+    cwd: ortRoot,
+  });
   // Defender/indexer can briefly hold handles -> EBUSY; retry
   rmSync(ortRoot, {
     recursive: true,
