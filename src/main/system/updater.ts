@@ -5,10 +5,11 @@ import { IPC } from "../../shared/bridge";
 import type { CheckUpdateResult, UpdateProgress } from "../../shared/bridge";
 import { handle, send } from "../core/ipc";
 import { withDownloadMutex } from "../core/mutex";
+import { setWindowCloseAllowed } from "../core/window";
 
 const { autoUpdater } = updaterPkg;
 
-const UPDATE_URL = "https://github.com/lumina-tl/lumina/releases";
+const UPDATE_URL = "https://github.com/AlanSanchez06/lumina/releases";
 
 let win: BrowserWindow | null = null;
 let checking = false;
@@ -105,7 +106,13 @@ export function registerUpdaterHandlers(target: BrowserWindow | null): void {
   });
   handle(IPC.installUpdate, () => {
     if (!downloadedVersion) return;
-    autoUpdater.quitAndInstall();
+    setWindowCloseAllowed(true);
+    try {
+      autoUpdater.quitAndInstall();
+    } catch (e) {
+      setWindowCloseAllowed(false);
+      throw e;
+    }
   });
   handle(IPC.openUpdateUrl, (_e, url: string) => {
     if (url) void shell.openExternal(url);

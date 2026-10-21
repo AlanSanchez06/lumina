@@ -12,7 +12,7 @@ import { invalidateComposite } from "../canvas/render";
 import { sidebar } from "../sidebar";
 import { models } from "../models";
 import { log } from "../logger";
-import type { BBox, InpaintMask } from "../../types";
+import type { BBox, InpaintMask, Page } from "../../types";
 
 /** Convert a Windows path to a loadable file:// URL */
 function fileUrl(p: string): string {
@@ -32,6 +32,33 @@ function loadImage(p: string): Promise<HTMLImageElement> {
     };
     img.src = fileUrl(p);
   });
+}
+
+async function createMasks(page: Page, model: string): Promise<InpaintMask[]> {
+  const result = await window.lumina.apiPost<{
+    patches?: Array<{ bbox: BBox; imagePath: string }>;
+    detail?: string;
+    error?: string;
+  }>("/inpaint", {
+    imagePath: page.filePath,
+    maskPath: page.maskPath ?? null,
+    boxes: page.textDetections.map((d) => d.bbox),
+    model,
+  });
+  if (!result || !Array.isArray(result.patches))
+    throw new Error(result?.detail || result?.error || "Inpaint failed");
+
+  const ts = Date.now();
+  return Promise.all(
+    result.patches.map(async (patch, i): Promise<InpaintMask> => ({
+      id: "mask-" + ts + "-" + i,
+      bbox: patch.bbox,
+      imagePath: patch.imagePath,
+      visible: true,
+      opacity: 1,
+      image: await loadImage(patch.imagePath),
+    })),
+  );
 }
 
 export const inpaint = {
@@ -60,41 +87,12 @@ export const inpaint = {
         "fe",
         `inpaint: start model=${model} boxes=${page.textDetections.length}`,
       );
-      const result = await window.lumina.apiPost<{
-        patches?: Array<{ bbox: BBox; imagePath: string }>;
-        detail?: string;
-      }>("/inpaint", {
-        imagePath: page.filePath,
-        maskPath: page.maskPath ?? null,
-        boxes: page.textDetections.map((d) => d.bbox),
-        model,
-      });
-      if (!result || !Array.isArray(result.patches))
-        throw new Error(result?.detail || "Inpaint failed");
-
-      log.debug(
-        "fe",
-        `inpaint: done ${(result.patches || []).length} patch(es)`,
-      );
-      const ts = Date.now();
-      const masks: InpaintMask[] = [];
-      for (let i = 0; i < result.patches.length; i++) {
-        const p = result.patches[i];
-        const image = await loadImage(p.imagePath);
-        masks.push({
-          id: "mask-" + ts + "-" + i,
-          bbox: p.bbox,
-          imagePath: p.imagePath,
-          visible: true,
-          opacity: 1,
-          image,
-        });
-      }
+      const masks = await createMasks(page, model);
+      log.debug("fe", `inpaint: done ${masks.length} patch(es)`);
 
       // Replace previous masks (re-run = fresh set of patches).
-      // Detection boxes stay in the page model but are no longer drawn —
-      // see render.ts (overlays only while masks.length === 0).
       page.inpaintMasks = masks;
+      page._cleanOnlyProcessed = true;
       state._inpaintLoaded = true;
       invalidateComposite(page.fileName);
 
@@ -116,6 +114,84 @@ export const inpaint = {
       );
     } finally {
       state.isRunning = false;
+    }
+  },
+
+  /** Clean all pages sequentially, reporting skips and failures together. */
+  runAll: async function (): Promise<void> {
+    if (state.isRunning || state.pages.length === 0) return;
+    state.isRunning = true;
+    const button = document.getElementById(
+      "btn-inpaint",
+    ) as HTMLButtonElement | null;
+    if (button) button.disabled = true;
+    let progressToast: ReturnType<typeof ui.toast> | null = null;
+    const failed: string[] = [];
+    let completed = 0;
+    try {
+      const model = models.selectedModel("inpaint") || "lama_manga";
+      for (let i = 0; i < state.pages.length; i++) {
+        const page = state.pages[i];
+        const alreadyProcessed =
+          page._cleanOnlyProcessed ??
+          (page.inpaintMasks.length > 0 && !page._cleanOnlyDetectionDone);
+        if (alreadyProcessed || !page._cleanOnlyDetectionDone) continue;
+        ui.dismissToast(progressToast);
+        progressToast = ui.toast(
+          i18n.t("toast.batchProgress", {
+            current: i + 1,
+            total: state.pages.length,
+            stage: i18n.t("header.inpaint"),
+          }),
+          "running",
+          0,
+        );
+        if (!page.textDetections.length) {
+          page._cleanOnlyProcessed = true;
+          history.snapshotPage(page);
+          completed++;
+          continue;
+        }
+        try {
+          page.inpaintMasks = await createMasks(page, model);
+          state._inpaintLoaded = true;
+          page._cleanOnlyProcessed = true;
+          invalidateComposite(page.fileName);
+          history.snapshotPage(page);
+          completed++;
+        } catch (err) {
+          failed.push(page.fileName);
+          log.error("fe", `Inpaint page ${i + 1} (${page.fileName}): ${err}`);
+        }
+      }
+      ui.dismissToast(progressToast);
+      progressToast = null;
+      canvas.render();
+      sidebar.render();
+      if (failed.length) {
+        ui.toast(
+          i18n.t("toast.batchPartial", {
+            stage: i18n.t("header.inpaint"),
+            completed,
+            files: failed.join(", "),
+          }),
+          completed ? "warn" : "error",
+          6000,
+        );
+      } else if (completed > 0) {
+        ui.toast(
+          i18n.t("toast.batchDone", {
+            stage: i18n.t("header.inpaint"),
+            count: completed,
+          }),
+          "success",
+          3000,
+        );
+      }
+    } finally {
+      ui.dismissToast(progressToast);
+      state.isRunning = false;
+      if (button) button.disabled = false;
     }
   },
 };

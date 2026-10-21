@@ -54,6 +54,12 @@ export const pipeline = {
   /** Run the given preset by id. */
   async runPreset(id: PresetId): Promise<void> {
     try {
+      if (id === "clean") {
+        await detection.runAll();
+        await ocr.runAll();
+        await inpaint.runAll();
+        return;
+      }
       await detection.run();
       await ocr.run();
       await inpaint.run();

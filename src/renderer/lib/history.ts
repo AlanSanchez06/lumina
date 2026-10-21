@@ -54,9 +54,14 @@ function _entry(page: Page): HistoryEntry {
 }
 
 /** Serialize one page's editable state (images not serialized). */
-function _serializePage(p: Page): string {
+function _serializePage(
+  p: Page,
+  includeSelections: boolean = state.getActivePage() === p,
+): string {
   return JSON.stringify({
     textDetections: p.textDetections,
+    _cleanOnlyProcessed: p._cleanOnlyProcessed,
+    _cleanOnlyDetectionDone: p._cleanOnlyDetectionDone,
     _selectedTextIdx: p._selectedTextIdx,
     layers: p.layers,
     _selectedLayerId: p._selectedLayerId,
@@ -76,12 +81,15 @@ function _serializePage(p: Page): string {
         }
       : null,
     backgroundVisible: p.backgroundVisible,
-    selections: _captureSelections ? _captureSelections() : null,
+    selections:
+      includeSelections && _captureSelections ? _captureSelections() : null,
   });
 }
 
 interface PageSnapshot {
   textDetections: unknown;
+  _cleanOnlyProcessed?: boolean;
+  _cleanOnlyDetectionDone?: boolean;
   _selectedTextIdx: number | null;
   layers: unknown;
   _selectedLayerId: string | null;
@@ -135,7 +143,7 @@ export const history = {
     state.pages.forEach(function (p) {
       const e = _entry(p);
       if (e.stack.length === 0) {
-        e.stack = [_serializePage(p)];
+        e.stack = [_serializePage(p, state.getActivePage() === p)];
         e.idx = 0;
       }
     });
@@ -147,8 +155,14 @@ export const history = {
     if (this._restoring) return;
     const page = state.getActivePage();
     if (!page) return;
+    this.snapshotPage(page, opts);
+  },
+
+  /** Push a snapshot for a page that may not be active. */
+  snapshotPage(page: Page, opts?: { dirty?: boolean }): void {
+    if (this._restoring) return;
     const e = _entry(page);
-    const data = _serializePage(page);
+    const data = _serializePage(page, state.getActivePage() === page);
     if (e.stack[e.idx] === data) return; // no change
     e.stack.length = e.idx + 1; // drop redo tail
     e.stack.push(data);
@@ -213,6 +227,8 @@ export const history = {
     const snap = JSON.parse(data) as PageSnapshot;
     this._restoring = true;
     page.textDetections = snap.textDetections as never;
+    page._cleanOnlyProcessed = snap._cleanOnlyProcessed;
+    page._cleanOnlyDetectionDone = snap._cleanOnlyDetectionDone;
     page._selectedTextIdx = snap._selectedTextIdx;
     page.layers = snap.layers as never;
     page._selectedLayerId = snap._selectedLayerId;

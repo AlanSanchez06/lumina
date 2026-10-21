@@ -316,12 +316,9 @@ function _render(): void {
     );
   }
 
-  // Detection overlays — shown only while boxes are toggled on, BEFORE the
-  // first inpaint run; once mask layers exist the patches themselves are the
-  // visual representation of the boxes. After OCR the boxes auto-hide (the
-  // OCR text lives in the sidebar layers) but the user can re-show them to
-  // verify/adjust a box and re-run OCR.
-  if (state.showDetBoxes && page.inpaintMasks.length === 0) {
+  // Detection boxes remain editable after cleaning so new regions can be
+  // selected and reprocessed on an already cleaned page.
+  if (state.showDetBoxes) {
     // Keep ONE persistent transformer for detection groups — re-creating it
     // every render (and dropping the old one without destroy) leaked nodes
     // during zoom/pan. The group registry clears it via _clearGroups().

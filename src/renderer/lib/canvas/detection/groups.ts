@@ -73,6 +73,7 @@ function _syncTextBboxFromGroup(
 ): void {
   const page = state.getActivePage();
   if (!page) return;
+  page._cleanOnlyProcessed = false;
   _syncBboxFromGroup(
     groupRegistry.textGroups(),
     page.textDetections,

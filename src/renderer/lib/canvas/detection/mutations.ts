@@ -10,6 +10,7 @@ import { history } from "../../history";
 canvas.deleteTextDetection = function (idx: number): void {
   const page = state.getActivePage();
   if (!page || idx < 0 || idx >= page.textDetections.length) return;
+  page._cleanOnlyProcessed = false;
   page.textDetections.splice(idx, 1);
   // Mirror deletion into the unified layer model (dialogue layers live at
   // the same index — layers = [...dialogue, ...free]).

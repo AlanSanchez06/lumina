@@ -10,6 +10,48 @@ import type { DetectResult, PageLayer, TextDetection } from "../../types";
 import { sortReadingOrder } from "../utils/reading-order";
 import { log } from "../logger";
 import { defaultTypography, loadGlobalTypography } from "../../types";
+import type { Page } from "../../types";
+
+function applyDetectionResult(page: Page, result: DetectResult): void {
+  const sortedTexts = sortReadingOrder(
+    (result.textDetections || []).map(
+      (d, i): TextDetection => ({
+        id: "text-" + i,
+        bbox: Object.assign({}, d.bbox),
+        type: d.type,
+        confidence: d.confidence || 0,
+        status: "auto",
+        textColor: d.textColor,
+        textAngle: d.textAngle,
+      }),
+    ),
+  );
+  page.textDetections = sortedTexts;
+  page.maskPath = result.maskPath ?? null;
+  page._selectedTextIdx = null;
+  page._cleanOnlyProcessed = false;
+  page._cleanOnlyDetectionDone = true;
+
+  const freeLayers = page.layers.filter((layer) => layer.type === "text-free");
+  const dialogueLayers: PageLayer[] = sortedTexts.map((d, i) => ({
+    id: "layer-t" + i,
+    type: "text-dialogue",
+    bbox: Object.assign({}, d.bbox),
+    source: d.text || "",
+    translation: d.translated || "",
+    typography: Object.assign(
+      defaultTypography(),
+      loadGlobalTypography(),
+      d.textColor ? { color: d.textColor } : {},
+      typeof d.textAngle === "number" ? { rotation: d.textAngle } : {},
+    ),
+    visible: true,
+    opacity: 1,
+  }));
+  page.layers = [...dialogueLayers, ...freeLayers];
+  page._selectedLayerId = null;
+  page._expandedLayerId = null;
+}
 
 export const detection = {
   /** Run detection on active page */
@@ -21,9 +63,13 @@ export const detection = {
     const btn = document.getElementById(
       "btn-detect",
     ) as HTMLButtonElement | null;
+    const allBtn = document.getElementById(
+      "btn-detect-all",
+    ) as HTMLButtonElement | null;
     if (btn) {
       btn.disabled = true;
     }
+    if (allBtn) allBtn.disabled = true;
 
     const isFirstRun = !state._modelLoaded;
     let loadingToast: ReturnType<typeof ui.toast> | null;
@@ -43,54 +89,8 @@ export const detection = {
       if (!result || result.error)
         throw new Error(result?.detail || "Detection failed");
 
-      // Sort into manga reading order (right→left, top→bottom) so T1..Tn
-      // matches how a reader would encounter the text.
-      const sortedTexts = sortReadingOrder(
-        (result.textDetections || []).map(
-          (d, i): TextDetection => ({
-            id: "text-" + i,
-            bbox: Object.assign({}, d.bbox),
-            type: d.type,
-            confidence: d.confidence || 0,
-            status: "auto",
-            textColor: d.textColor,
-            textAngle: d.textAngle,
-          }),
-        ),
-      );
-      page.textDetections = sortedTexts;
-      page.maskPath = result.maskPath ?? null;
-      log.debug("fe", `detect: done texts=${sortedTexts.length}`);
-
-      page._selectedTextIdx = null;
-
-      // Sync text detections into the unified layer model (dialogue layers).
-      // Free-text layers created by the user are preserved.
-      const freeLayers = page.layers.filter(function (l) {
-        return l.type === "text-free";
-      });
-      const dialogueLayers: PageLayer[] = sortedTexts.map(function (d, i) {
-        return {
-          id: "layer-t" + i,
-          type: "text-dialogue" as const,
-          bbox: Object.assign({}, d.bbox),
-          source: d.text || "",
-          translation: d.translated || "",
-          // New dialogue layers inherit the global type defaults; the
-          // detected glyph color + slant override the defaults when available.
-          typography: Object.assign(
-            defaultTypography(),
-            loadGlobalTypography(),
-            d.textColor ? { color: d.textColor } : {},
-            typeof d.textAngle === "number" ? { rotation: d.textAngle } : {},
-          ),
-          visible: true,
-          opacity: 1,
-        };
-      });
-      page.layers = [...dialogueLayers, ...freeLayers];
-      page._selectedLayerId = null;
-      page._expandedLayerId = null;
+      applyDetectionResult(page, result);
+      log.debug("fe", `detect: done texts=${page.textDetections.length}`);
 
       // Fresh boxes — make sure the overlay is visible.
       state.showDetBoxes = true;
@@ -117,7 +117,11 @@ export const detection = {
       const btn2 = document.getElementById(
         "btn-detect",
       ) as HTMLButtonElement | null;
+      const allBtn2 = document.getElementById(
+        "btn-detect-all",
+      ) as HTMLButtonElement | null;
       if (btn2) btn2.disabled = false;
+      if (allBtn2) allBtn2.disabled = false;
     }
   },
 
@@ -126,35 +130,80 @@ export const detection = {
     if (state.isRunning || state.pages.length === 0) return;
     state.isRunning = true;
 
-    for (let i = 0; i < state.pages.length; i++) {
-      const page = state.pages[i];
-      if (!page.filePath) continue;
-      try {
-        const result = await window.lumina.apiPost<DetectResult>("/detect", {
-          imagePath: page.filePath,
-          model: models.selectedModel("detect") || "rtdetr",
-        });
-        if (!result || result.error) continue;
+    const button = document.getElementById(
+      "btn-detect-all",
+    ) as HTMLButtonElement | null;
+    const detectButton = document.getElementById(
+      "btn-detect",
+    ) as HTMLButtonElement | null;
+    if (button) button.disabled = true;
+    if (detectButton) detectButton.disabled = true;
 
-        page.textDetections = (result.textDetections || []).map(
-          (d, j): TextDetection => ({
-            id: "text-" + j,
-            bbox: Object.assign({}, d.bbox),
-            type: d.type,
-            confidence: d.confidence || 0,
-            status: "auto",
+    let progressToast: ReturnType<typeof ui.toast> | null = null;
+    let completed = 0;
+    const failed: string[] = [];
+    try {
+      const model = models.selectedModel("detect") || "rtdetr";
+      for (let i = 0; i < state.pages.length; i++) {
+        const page = state.pages[i];
+        const alreadyProcessed =
+          page._cleanOnlyProcessed ??
+          (page.inpaintMasks.length > 0 && !page._cleanOnlyDetectionDone);
+        if (alreadyProcessed || page._cleanOnlyDetectionDone) continue;
+        ui.dismissToast(progressToast);
+        progressToast = ui.toast(
+          i18n.t("toast.detectAllProgress", {
+            current: i + 1,
+            total: state.pages.length,
           }),
+          "running",
+          0,
         );
-        page.maskPath = result.maskPath ?? null;
-      } catch (err) {
-        log.error("fe", `Detection page ${i + 1}: ${err}`);
+        try {
+          const result = await window.lumina.apiPost<DetectResult>("/detect", {
+            imagePath: page.filePath,
+            model,
+          });
+          if (!result || result.error)
+            throw new Error(result?.detail || "Detection failed");
+          applyDetectionResult(page, result);
+          history.snapshotPage(page);
+          completed++;
+          state._modelLoaded = true;
+        } catch (err) {
+          failed.push(page.fileName);
+          log.error("fe", `Detection page ${i + 1} (${page.fileName}): ${err}`);
+        }
       }
-    }
+      ui.dismissToast(progressToast);
+      progressToast = null;
 
-    state.isRunning = false;
-    canvas._clearGroups();
-    canvas.render();
-    canvas.renderPageStrip();
-    sidebar.render();
+      state.showDetBoxes = true;
+      canvas._clearGroups();
+      canvas.render();
+      canvas.renderPageStrip();
+      sidebar.render();
+      if (failed.length) {
+        ui.toast(
+          i18n.t("toast.detectAllPartial", {
+            completed,
+            files: failed.join(", "),
+          }),
+          completed ? "warn" : "error",
+          6000,
+        );
+      } else if (completed > 0) {
+        ui.toast(
+          i18n.t("toast.detectAllDone", { count: completed }),
+          "success",
+          3000,
+        );
+      }
+    } finally {
+      ui.dismissToast(progressToast);
+      state.isRunning = false;
+      if (button) button.disabled = false;
+      if (detectButton) detectButton.disabled = false;
+    }
   },
 };

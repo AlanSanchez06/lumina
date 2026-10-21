@@ -29,7 +29,7 @@ let error: string | undefined;
 let progress = 0;
 
 function runtimeVersionBase(): string {
-  return `https://github.com/lumina-tl/lumina/releases/download/v${app.getVersion()}`;
+  return `https://github.com/AlanSanchez06/lumina/releases/download/v${app.getVersion()}`;
 }
 
 function push(p: RuntimeProgress): void {

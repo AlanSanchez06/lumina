@@ -87,6 +87,8 @@ function buildPayload(savePath: string | null): ProjectSavePayload {
           visible: m.visible,
           opacity: m.opacity,
         })),
+        _cleanOnlyProcessed: p._cleanOnlyProcessed,
+        _cleanOnlyDetectionDone: p._cleanOnlyDetectionDone,
         cleanupMask: p.cleanupMask
           ? {
               id: p.cleanupMask.id,
@@ -323,6 +325,8 @@ export const project = {
         textDetections: pd.textDetections as Page["textDetections"],
         layers: pd.layers as Page["layers"],
         inpaintMasks: pd.inpaintMasks.map((m) => ({ ...m })),
+        _cleanOnlyProcessed: pd._cleanOnlyProcessed,
+        _cleanOnlyDetectionDone: pd._cleanOnlyDetectionDone,
         cleanupMask: pd.cleanupMask ? { ...pd.cleanupMask } : null,
         backgroundVisible: pd.backgroundVisible,
         _selectedTextIdx: null,

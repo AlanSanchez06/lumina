@@ -9,6 +9,7 @@ import {
   getOcrNormalizeMode,
   setOcrNormalizeMode,
 } from "../pipeline/text-norm";
+import { requestUpdate } from "../ui/auto-update";
 
 export const generalTab = {
   build(pane: HTMLElement): void {
@@ -154,6 +155,34 @@ export const generalTab = {
     ocrSection.appendChild(ocrHint);
 
     pane.appendChild(ocrSection);
+
+    const updateSection = document.createElement("div");
+    updateSection.className = "settings-section";
+    const updateRow = document.createElement("div");
+    updateRow.className = "field-row items-center justify-between mb-3";
+    const updateLabel = document.createElement("span");
+    updateLabel.className = "text-[0.78rem] text-text-primary";
+    updateLabel.dataset.i18n = "settings.updateTitle";
+    updateLabel.textContent = i18n.t("settings.updateTitle");
+    const updateButton = document.createElement("button");
+    updateButton.type = "button";
+    updateButton.id = "settings-check-updates";
+    updateButton.className = "btn";
+    updateButton.dataset.i18n = "settings.checkUpdates";
+    updateButton.textContent = i18n.t("settings.checkUpdates");
+    updateButton.addEventListener("click", () => {
+      void requestUpdate();
+    });
+    updateRow.append(updateLabel, updateButton);
+    updateSection.appendChild(updateRow);
+    const updateStatus = document.createElement("p");
+    updateStatus.id = "settings-update-status";
+    updateStatus.className =
+      "text-[0.68rem] text-text-muted leading-relaxed";
+    updateStatus.dataset.i18n = "settings.updateHint";
+    updateStatus.textContent = i18n.t("settings.updateHint");
+    updateSection.appendChild(updateStatus);
+    pane.appendChild(updateSection);
 
     ocrSel.value = getOcrNormalizeMode();
     ocrSel.addEventListener("change", function () {

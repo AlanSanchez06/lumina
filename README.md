@@ -4,6 +4,8 @@ Lumina is a free, open-source desktop app for translating manga, manhwa, and man
 
 See the [documentation website](https://lumina.navierr.dev/) for guides and details.
 
+> **Edición en español:** Esta es una edición independiente del código de Lumina adaptada para el español. No formamos parte del equipo original del proyecto ni estamos afiliados con él.
+
 ![Lumina main interface](showcase/screenshot.png)
 
 ## Table of Contents
@@ -180,7 +182,7 @@ Two Windows installers ship. For sharing the app across different computers, use
 - **`Lumina-Setup-DML-<version>.exe`** — DirectML (CPU + DirectML), universal: runs on compatible DirectX 12 GPUs — including NVIDIA, AMD, and Intel — and falls back to CPU on machines without a compatible GPU.
 - **`Lumina-Setup-CUDA-<version>.exe`** — CUDA 12, NVIDIA-only. **Highly recommended over the DML installer if you have an NVIDIA RTX/GTX card** — it's noticeably faster. Requires an NVIDIA GPU with a reasonably recent driver.
 
-Both are published as a release on the [Releases](https://github.com/lumina-tl/lumina/releases) page, together with their update feed files. Each variant uses its own update channel, so a DML install only ever updates from DML artifacts and a CUDA install only from CUDA artifacts. Updates are differential — the app downloads only the parts that changed, not the whole installer — and install on launch, so a one-time install is usually all that's needed. Release notes are taken from the matching `## [<version>]` section in [CHANGELOG.md](CHANGELOG.md); if that section is missing, notes are generated from the commits.
+Both are published as a release on the [Releases](https://github.com/AlanSanchez06/lumina/releases) page, together with their update feed files. Each variant uses its own update channel, so a DML install only ever updates from DML artifacts and a CUDA install only from CUDA artifacts. Updates are differential — the app downloads only the parts that changed, not the whole installer. Click the update button once; Lumina downloads and installs the update in place, then restarts. If there are unsaved changes, Lumina asks whether to save before restarting. A one-time installer is usually all that's needed. Release notes are taken from the matching `## [<version>]` section in [CHANGELOG.md](CHANGELOG.md); if that section is missing, notes are generated from the commits.
 
 > **CUDA note:** starting with v0.3.0, the CUDA installer no longer bundles the ~1.4 GB ONNX Runtime — the app downloads it once into your user folder on first run (shown in Settings → Models) and verifies it before use. That keeps the installer small and makes every update after this one a small differential download. If you update from an older CUDA version, this first launch downloads the runtime once; later updates won't re-download it. DML installs are unaffected — the runtime is still bundled in that installer.
 
