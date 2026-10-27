@@ -1,6 +1,6 @@
 /** Text Tool — stage interactions: marquee (paragraph) + click (point) */
 import { state } from "../../../state";
-import { canvas } from "../../index";
+import { canvas, registerStageCreatedHandler } from "../../index";
 import { stageToImg, cleanedViewReady, getEditor } from "./shared";
 import { createAndEdit } from "./create";
 
@@ -11,6 +11,7 @@ interface DragState {
 }
 
 let marquee: HTMLDivElement | null = null;
+let _bound = false;
 
 function removeMarquee(): void {
   if (marquee) {
@@ -28,12 +29,9 @@ function updateMarquee(x1: number, y1: number, x2: number, y2: number): void {
 }
 
 export function bindStageInteractions(): void {
-  const bindWhenReady = function (): void {
-    const stage = canvas.getStage();
-    if (!stage) {
-      setTimeout(bindWhenReady, 500);
-      return;
-    }
+  if (_bound) return;
+  _bound = true;
+  registerStageCreatedHandler(function (stage) {
     const container = stage.container();
     const drag: DragState = { startX: 0, startY: 0, active: false };
 
@@ -100,6 +98,5 @@ export function bindStageInteractions(): void {
         createAndEdit({ x: img.x, y: img.y, w: 200, h: 44 });
       }
     });
-  };
-  bindWhenReady();
+  });
 }

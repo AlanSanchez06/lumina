@@ -149,7 +149,14 @@ export const detection = {
         const alreadyProcessed =
           page._cleanOnlyProcessed ??
           (page.inpaintMasks.length > 0 && !page._cleanOnlyDetectionDone);
-        if (alreadyProcessed || page._cleanOnlyDetectionDone) continue;
+        if (
+          alreadyProcessed ||
+          page._cleanOnlyDetectionDone ||
+          page.textDetections.length > 0
+        ) {
+          page._cleanOnlyDetectionDone = true;
+          continue;
+        }
         ui.dismissToast(progressToast);
         progressToast = ui.toast(
           i18n.t("toast.detectAllProgress", {

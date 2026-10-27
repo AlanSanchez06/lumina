@@ -47,7 +47,10 @@ export const pipeline = {
   runOcr: ocr.run,
   runInpaint: inpaint.run,
   async runAll(): Promise<void> {
-    await detection.run();
+    const page = state.getActivePage();
+    if (page && !page._cleanOnlyDetectionDone && !page.textDetections.length) {
+      await detection.run();
+    }
     await ocr.run();
     await inpaint.run();
   },
@@ -63,7 +66,10 @@ export const pipeline = {
         await inpaint.runAll();
         return;
       }
-      await detection.run();
+      const page = state.getActivePage();
+      if (page && !page._cleanOnlyDetectionDone && !page.textDetections.length) {
+        await detection.run();
+      }
       await ocr.run();
       await inpaint.run();
     } finally {

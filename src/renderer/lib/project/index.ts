@@ -328,7 +328,8 @@ export const project = {
         layers: pd.layers as Page["layers"],
         inpaintMasks: pd.inpaintMasks.map((m) => ({ ...m })),
         _cleanOnlyProcessed: pd._cleanOnlyProcessed,
-        _cleanOnlyDetectionDone: pd._cleanOnlyDetectionDone,
+        _cleanOnlyDetectionDone:
+          pd._cleanOnlyDetectionDone || pd.textDetections.length > 0,
         cleanupMask: pd.cleanupMask ? { ...pd.cleanupMask } : null,
         backgroundVisible: pd.backgroundVisible,
         _selectedTextIdx: null,

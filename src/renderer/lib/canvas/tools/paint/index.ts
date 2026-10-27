@@ -1,6 +1,6 @@
 /** Paint tool — public entry point & stage interactions. */
 import { state } from "../../../state";
-import { canvas } from "../../index";
+import { canvas, registerStageCreatedHandler } from "../../index";
 import { tools } from "../../../ui/tools";
 import { setSliderFill } from "../../../ui/slider";
 import { setPaintColor, stageToImg, paintSettings } from "./shared";
@@ -24,13 +24,7 @@ let _prevTool = "brush";
 // ── Stage interactions ──
 
 function bindStage(): void {
-  const bindWhenReady = function (): void {
-    const stage = canvas.getStage();
-    if (!stage) {
-      setTimeout(bindWhenReady, 500);
-      return;
-    }
-
+  registerStageCreatedHandler(function (stage) {
     stage.on("mousemove", function (e) {
       if (!isPaintTool()) return;
       const pos = stage.getPointerPosition();
@@ -96,8 +90,7 @@ function bindStage(): void {
       // Brush / eraser — start a stroke
       handleStroke(page, img, tool as "brush" | "eraser");
     });
-  };
-  bindWhenReady();
+  });
 }
 
 // ── Options bar sync (color swatch etc. after eyedropper sample) ──

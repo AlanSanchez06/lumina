@@ -1,6 +1,6 @@
 /** Cursor management — hover + transformer anchor cursors. */
 import { state } from "../state";
-import { canvas } from "./index";
+import { canvas, registerStageCreatedHandler } from "./index";
 
 /** Re-assert correct cursor on every mousemove (fixes stale Konva cursors). */
 let _cursorBound = false;
@@ -49,13 +49,9 @@ export function bindHoverCursor(): void {
     if (stage && stage.content) stage.content.style.cursor = cursor;
   };
 
-  const bind = function (): void {
-    const stage = canvas.getStage();
+  registerStageCreatedHandler(function (stage) {
     const container = document.getElementById("canvas-container");
-    if (!stage || !container) {
-      setTimeout(bind, 500);
-      return;
-    }
+    if (!container) return;
     stage.on("mousemove", function (e) {
       // Panning owns the cursor
       if (container.style.cursor === "grabbing") return;
@@ -89,6 +85,5 @@ export function bindHoverCursor(): void {
     stage.content.addEventListener("mouseleave", function () {
       if (stage.content) stage.content.style.cursor = "";
     });
-  };
-  bind();
+  });
 }
