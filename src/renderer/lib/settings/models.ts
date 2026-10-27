@@ -8,6 +8,7 @@
 import * as i18n from "../i18n";
 import { models } from "../models";
 import {
+  describe as describeModel,
   describeGpu as describeGpuDynamic,
   recommendedFor,
 } from "../models/descriptions";
@@ -25,10 +26,12 @@ const SECTIONS: Array<[string, string]> = [
   ["detect", "models.sectionDetect"],
   ["ocr", "models.sectionOcr"],
   ["inpaint", "models.sectionInpaint"],
+  ["aux", "models.sectionAux"],
 ];
 
 /** Kind of the currently visible panel — preserved across refresh(). */
 let _activeKind: string | null = null;
+let _unsubscribeLanguageChange: (() => void) | null = null;
 
 function fmtSize(n: number | null | undefined): string {
   if (!n) return "—";
@@ -47,6 +50,23 @@ function hintEl(): HTMLElement {
 export const modelsTab = {
   build(pane: HTMLElement): void {
     pane.dataset.modelsTab = "1";
+    if (!_unsubscribeLanguageChange) {
+      _unsubscribeLanguageChange = i18n.onLanguageChange(() => {
+        const currentPane = document.getElementById("tab-models");
+        if (!currentPane) return;
+        currentPane
+          .querySelectorAll<HTMLElement>(".model-panel")
+          .forEach((panel) => {
+            const kind = panel.dataset.kind;
+            if (!kind) return;
+            this._updateAll(
+              panel,
+              kind,
+              models.list().filter((model) => model.kind === kind),
+            );
+          });
+      });
+    }
     // Live progress → update the matching category panel
     models.onProgress((p) => this._onProgress(pane, p));
     // Device info changes (GPU toggle here, startup fetch, backend restart)
@@ -54,9 +74,13 @@ export const modelsTab = {
     models.onDeviceChange(() => this._refreshGpuBadges(pane));
     // CUDA runtime download → gate the model download buttons + GPU card.
     models.onRuntimeProgress?.((p) => {
-      if (p.state === "downloading") {
+      if (p.state === "downloading" || p.state === "extracting") {
         this._setDownloadButtonsDisabled(true);
-      } else if (p.state === "ready" || p.state === "error") {
+      } else if (
+        p.state === "ready" ||
+        p.state === "error" ||
+        p.state === "cancelled"
+      ) {
         this._setDownloadButtonsDisabled(false);
         this.refresh();
       }
@@ -251,7 +275,15 @@ export const modelsTab = {
     btn.addEventListener("click", () =>
       this._download(btn, btn.dataset.model || ""),
     );
-    foot.append(meta, btn);
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "btn model-delete";
+    removeBtn.addEventListener("click", () => {
+      const id = card.dataset.model || "";
+      const model = items.find((item) => item.id === id);
+      if (model) void this._deleteModel(removeBtn, model.id, model.name);
+    });
+    foot.append(meta, btn, removeBtn);
 
     card.append(head, text, gpu, foot);
     return card;
@@ -403,21 +435,59 @@ export const modelsTab = {
     });
   },
 
+  async _deleteModel(
+    btn: HTMLButtonElement,
+    modelId: string,
+    modelName: string,
+  ): Promise<void> {
+    if (
+      !modelId ||
+      models.isBusy() ||
+      !window.confirm(i18n.t("models.deleteConfirm", { model: modelName }))
+    ) {
+      return;
+    }
+    btn.disabled = true;
+    try {
+      await models.deleteModel(modelId);
+      this.refresh();
+      ui.toast(i18n.t("models.deleted"), "success");
+    } catch (err) {
+      btn.disabled = false;
+      ui.toast(
+        i18n.t("models.deleteFailed", {
+          error: String((err as Error)?.message || err),
+        }),
+        "error",
+        6000,
+      );
+    }
+  },
+
   /** Disable every model download button while the CUDA runtime installs. */
   _setDownloadButtonsDisabled(disabled: boolean): void {
     const pane = document.getElementById("tab-models");
     if (!pane) return;
     pane.querySelectorAll<HTMLButtonElement>(".model-dl").forEach((b) => {
       if (disabled) {
-        b.dataset.prevText = b.textContent || "";
+        if (b.dataset.prevText === undefined) {
+          b.dataset.prevText = b.textContent || "";
+          b.dataset.prevDisabled = b.disabled ? "1" : "0";
+        }
         b.disabled = true;
         b.textContent = i18n.t("models.runtimeBusy");
       } else if (b.dataset.prevText !== undefined) {
-        b.disabled = false;
+        b.disabled = b.dataset.prevDisabled === "1";
         b.textContent = b.dataset.prevText;
         delete b.dataset.prevText;
+        delete b.dataset.prevDisabled;
       }
     });
+    pane
+      .querySelectorAll<HTMLButtonElement>(".model-delete")
+      .forEach((button) => {
+        button.disabled = disabled;
+      });
   },
 
   /** Fill the CUDA runtime status card from a runtime-status payload. */
@@ -505,19 +575,26 @@ export const modelsTab = {
     badge.hidden = m.id !== sel;
     badge.textContent = i18n.t("models.selected");
     const text = card.querySelector<HTMLElement>(".model-desc-text")!;
-    text.textContent = m.description || i18n.t("models.noDescription");
+    text.textContent =
+      describeModel(m.id, i18n.lang()) || i18n.t("models.noDescription");
     this._updateGpuBadge(card, m, false);
     card.querySelector<HTMLElement>(".model-desc-meta")!.textContent = fmtSize(
       m.size,
     );
     const btn = card.querySelector<HTMLButtonElement>(".model-dl")!;
+    const removeBtn =
+      card.querySelector<HTMLButtonElement>(".model-delete")!;
     btn.dataset.model = m.id;
     if (m.ready) {
       btn.disabled = true;
       btn.textContent = i18n.t("models.ready");
+      removeBtn.hidden = false;
+      removeBtn.disabled = models.isBusy();
+      removeBtn.textContent = i18n.t("models.delete");
     } else {
       btn.disabled = false;
       btn.textContent = i18n.t("models.download");
+      removeBtn.hidden = true;
     }
   },
 
@@ -572,6 +649,12 @@ export const modelsTab = {
     } else if (p.done || p.error || p.cancelled) {
       // Re-check + re-render once the batch finishes
       this.refresh();
+    } else {
+      panel
+        .querySelectorAll<HTMLButtonElement>(".model-delete")
+        .forEach((button) => {
+          button.disabled = p.running;
+        });
     }
   },
 };

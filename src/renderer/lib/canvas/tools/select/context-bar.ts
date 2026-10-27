@@ -8,9 +8,12 @@ import {
   selectionAABB,
   imgToStage,
   clearSelections,
+  shapeAABB,
+  isHoleShape,
 } from "./shared";
 import { refreshOverlay } from "./render";
 import { toDetection } from "./actions/to-detection";
+import { inpaint } from "../../../pipeline/inpaint";
 
 let _bar: HTMLDivElement | null = null;
 
@@ -35,6 +38,14 @@ function _mkBtn(
   b.textContent = label;
   b.addEventListener("click", onClick);
   return b;
+}
+
+function _selectedBoxes() {
+  return selections.flatMap((selection) =>
+    selection.shapes
+      .filter((shape) => !isHoleShape(selection.shapes, shape))
+      .map(shapeAABB),
+  );
 }
 
 export function showContextBar(): void {
@@ -65,6 +76,38 @@ export function showContextBar(): void {
       "selectool-bar-action",
       function () {
         toDetection();
+      },
+    ),
+  );
+
+  bar.appendChild(
+    _mkBtn(
+      i18n.t("selectool.cleanArea"),
+      "selectool-bar-action",
+      function () {
+        const boxes = _selectedBoxes();
+        void inpaint.runBoxes(boxes).then((success) => {
+          if (!success) return;
+          clearSelections();
+          refreshOverlay();
+          hideContextBar();
+        });
+      },
+    ),
+  );
+
+  bar.appendChild(
+    _mkBtn(
+      i18n.t("selectool.eraseArea"),
+      "selectool-bar-clear",
+      function () {
+        const boxes = _selectedBoxes();
+        void inpaint.eraseBoxes(boxes).then((success) => {
+          if (!success) return;
+          clearSelections();
+          refreshOverlay();
+          hideContextBar();
+        });
       },
     ),
   );
@@ -109,7 +152,14 @@ function positionBar(): void {
     top = y + h + 8;
     bar.style.transform = "translate(-50%, 0)";
   }
-  const left = Math.max(70, Math.min(container.clientWidth - 70, x + w / 2));
+  const halfWidth = bar.offsetWidth / 2;
+  const left =
+    halfWidth * 2 + 16 > container.clientWidth
+      ? container.clientWidth / 2
+      : Math.max(
+          halfWidth + 8,
+          Math.min(container.clientWidth - halfWidth - 8, x + w / 2),
+        );
   bar.style.left = left + "px";
   bar.style.top = top + "px";
 }

@@ -4,6 +4,8 @@ import { ui } from "../ui";
 import { s } from "./state";
 import type { DownloadProgress, RuntimeProgress } from "../../types";
 
+let runtimeToastState: RuntimeProgress["state"] | null = null;
+
 export function initProgressHandlers(): void {
   // Forward model download progress to subscribers and drive the
   // global download toast (bottom-right: bar, size, speed).
@@ -37,17 +39,41 @@ export function initProgressHandlers(): void {
   // CUDA runtime download — same toast, highest priority. While it runs,
   // model downloads and the app update queue behind it.
   window.lumina.onRuntimeProgress((p: RuntimeProgress) => {
-    s.runtimeBusy = p.state === "downloading";
-    if (p.state === "downloading") {
-      if (!document.getElementById("dl-toast")) {
-        ui.downloadToast(i18n.t("toast.runtimeDownloading"));
+    s.runtimeBusy =
+      p.state === "downloading" || p.state === "extracting";
+    if (p.state === "downloading" || p.state === "extracting") {
+      if (
+        runtimeToastState !== p.state ||
+        !document.getElementById("dl-toast")
+      ) {
+        runtimeToastState = p.state;
+        ui.downloadToast(
+          i18n.t(
+            p.state === "downloading"
+              ? "toast.runtimeDownloading"
+              : "toast.runtimeExtracting",
+          ),
+          () => {
+            void window.lumina.cancelRuntime().catch((err) => {
+              ui.toast(String(err), "error", 5000);
+            });
+          },
+          i18n.t("toast.cancelRuntime"),
+        );
       }
       ui.updateDownloadToast(p.percent || 0, p.transferred || 0, p.total || 0);
+    } else if (p.state === "cancelled") {
+      runtimeToastState = null;
+      const el = document.getElementById("dl-toast");
+      if (el) el.remove();
+      ui.toast(i18n.t("toast.runtimeCancelled"), "info", 3000);
     } else if (p.state === "ready") {
+      runtimeToastState = null;
       const el = document.getElementById("dl-toast");
       if (el) el.remove();
       ui.toast(i18n.t("toast.runtimeInstalled"), "success", 4000);
     } else if (p.state === "error") {
+      runtimeToastState = null;
       const el = document.getElementById("dl-toast");
       if (el) el.remove();
       ui.toast(i18n.t("toast.runtimeError"), "error", 8000);

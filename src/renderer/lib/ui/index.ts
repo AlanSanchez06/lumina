@@ -297,7 +297,11 @@ export const ui = {
   /** Bottom-right download notification with progress bar.
    *  Returns element; update via updateDownloadToast().
    *  Pass onCancel to show a cancel button in the bar. */
-  downloadToast(msg: string, onCancel?: () => void): HTMLElement {
+  downloadToast(
+    msg: string,
+    onCancel?: () => void,
+    cancelLabel?: string,
+  ): HTMLElement {
     // Remove stale download toast if any
     const old = document.getElementById("dl-toast");
     if (old) old.remove();
@@ -327,7 +331,7 @@ export const ui = {
       '<span id="dl-pct" style="color:#569cd6;font-variant-numeric:tabular-nums;flex-shrink:0;">0%</span>' +
       (onCancel
         ? '<button id="dl-cancel" title="' +
-          i18n.t("toast.cancelDownload") +
+          (cancelLabel || i18n.t("toast.cancelDownload")) +
           '" style="flex-shrink:0;display:flex;align-items:center;background:transparent;border:none;color:#888;cursor:pointer;padding:2px;border-radius:4px;">' +
           '<i data-lucide="x" style="width:14px;height:14px;"></i></button>'
         : "") +
@@ -375,7 +379,11 @@ export const ui = {
     if (sizeEl && total > 0) {
       sizeEl.textContent = _fmtSize(downloaded) + " / " + _fmtSize(total);
     }
-    if (speedEl) {
+    if (total <= 0) {
+      _dlSamples = [];
+      if (sizeEl) sizeEl.textContent = "";
+      if (speedEl) speedEl.textContent = "";
+    } else if (speedEl) {
       const now = Date.now();
       _dlSamples.push({ t: now, b: downloaded });
       // keep ~5s window

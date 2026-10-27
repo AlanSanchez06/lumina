@@ -27,6 +27,7 @@ let state: RuntimeState = "missing";
 let version: string | undefined;
 let error: string | undefined;
 let progress = 0;
+let runtimeAbortController: AbortController | null = null;
 
 function runtimeVersionBase(): string {
   return `https://github.com/AlanSanchez06/lumina/releases/download/v${app.getVersion()}`;
@@ -44,6 +45,10 @@ function push(p: RuntimeProgress): void {
     version = p.version;
     error = undefined;
     progress = 100;
+  } else if (p.state === "cancelled") {
+    state = "missing";
+    progress = 0;
+    error = undefined;
   } else if (p.state === "error") {
     state = "error";
     error = p.error;
@@ -65,19 +70,27 @@ export function getRuntimeStatus(): RuntimeInfo {
   };
 }
 
-async function ensureInternal(): Promise<void> {
+async function ensureInternal(signal: AbortSignal): Promise<void> {
   if (installerVariant() !== "cuda") return;
 
   let info: { url: string; sha512: string; version: string } | null = null;
   try {
     const raw = JSON.parse(
-      (await fetchBuffer(`${runtimeVersionBase()}/cuda-runtime.json`)).toString(
-        "utf-8",
-      ),
+      (
+        await fetchBuffer(
+          `${runtimeVersionBase()}/cuda-runtime.json`,
+          5,
+          signal,
+        )
+      ).toString("utf-8"),
     );
     if (raw?.url && raw?.sha512) info = raw;
   } catch {
     /* manifest unreachable */
+  }
+  if (signal.aborted) {
+    push({ state: "cancelled" });
+    return;
   }
 
   if (!info?.url || !info?.sha512) {
@@ -115,30 +128,47 @@ async function ensureInternal(): Promise<void> {
     ? info.url
     : `${runtimeVersionBase()}/${info.url}`;
   try {
-    let lastPct = -1;
-    await downloadFile(archiveUrl, archive, (done, total) => {
-      if (total > 0) {
-        const pct = Math.min(100, Math.round((done / total) * 100));
-        if (pct !== lastPct) {
-          lastPct = pct;
-          progress = pct;
-          push({
-            state: "downloading",
-            percent: pct,
-            transferred: done,
-            total,
-          });
-        }
-      }
-    });
+    let archiveValid = false;
+    if (fs.existsSync(archive)) {
+      archiveValid = (await sha512File(archive)) === info.sha512;
+      if (!archiveValid) fs.rmSync(archive, { force: true });
+    }
+
+    if (!archiveValid) {
+      let lastPct = -1;
+      await downloadFile(
+        archiveUrl,
+        archive,
+        (done, total) => {
+          if (total > 0) {
+            const pct = Math.min(100, Math.round((done / total) * 100));
+            if (pct !== lastPct) {
+              lastPct = pct;
+              progress = pct;
+              push({
+                state: "downloading",
+                percent: pct,
+                transferred: done,
+                total,
+              });
+            }
+          }
+        },
+        signal,
+      );
+    }
+
+    if (signal.aborted) throw new Error("Runtime installation cancelled");
     const got = await sha512File(archive);
+    if (signal.aborted) throw new Error("Runtime installation cancelled");
     if (got !== info.sha512) {
+      fs.rmSync(archive, { force: true });
       throw new Error(`sha512 mismatch: expected ${info.sha512}, got ${got}`);
     }
     push({ state: "extracting", percent: 0 });
     await extract7z(archive, cudaDir(), (pct) => {
       push({ state: "extracting", percent: pct });
-    });
+    }, signal);
     try {
       fs.unlinkSync(archive);
     } catch {
@@ -154,18 +184,29 @@ async function ensureInternal(): Promise<void> {
     fs.writeFileSync(markerFile(), JSON.stringify(marker, null, 2));
     push({ state: "ready", version: info.version });
   } catch (e) {
-    fs.rmSync(archive, { force: true });
     fs.rmSync(archive + ".part", { force: true });
     fs.rmSync(cudaDir(), { recursive: true, force: true });
-    push({ state: "error", error: String((e as Error)?.message || e) });
+    if (signal.aborted) push({ state: "cancelled" });
+    else push({ state: "error", error: String((e as Error)?.message || e) });
   }
 }
 
 export function ensureCudaRuntime(): Promise<void> {
-  return withDownloadMutex(() => ensureInternal());
+  const controller = new AbortController();
+  runtimeAbortController = controller;
+  return withDownloadMutex(() => ensureInternal(controller.signal)).finally(
+    () => {
+      if (runtimeAbortController === controller) {
+        runtimeAbortController = null;
+      }
+    },
+  );
 }
 
 export function registerRuntimeHandlers(target: BrowserWindow | null): void {
   win = target;
   handle(IPC.runtimeStatus, () => getRuntimeStatus());
+  handle(IPC.runtimeCancel, () => {
+    runtimeAbortController?.abort();
+  });
 }

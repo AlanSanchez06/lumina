@@ -15,6 +15,7 @@ export const IPC = {
   // Models
   checkModel: "check-model",
   downloadModel: "download-model",
+  deleteModel: "delete-model",
   cancelDownload: "cancel-download",
   modelDownloadProgress: "model-download-progress",
 
@@ -72,6 +73,7 @@ export const IPC = {
 
   // CUDA runtime
   runtimeStatus: "runtime-status",
+  runtimeCancel: "runtime-cancel",
   runtimeProgress: "runtime-progress",
   runtimeBusy: "runtime-busy",
 } as const;

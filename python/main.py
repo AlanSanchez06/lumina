@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import sys
 import threading
 from pathlib import Path
@@ -16,6 +17,7 @@ from schemas import (
     ModelStatus,
     ModelInfo,
     ModelDownloadRequest,
+    ModelDeleteRequest,
     DeviceConfigureRequest,
     OcrRequest,
     OcrResponse,
@@ -431,6 +433,61 @@ def model_cancel():
     """Cancel the in-flight model download; temp .part files are removed."""
     _dl_cancel()
     return {"status": "ok"}
+
+
+@app.post("/model/delete")
+def model_delete(req: ModelDeleteRequest):
+    """Unload and remove one registered model from the configured models directory."""
+    if _download_state["running"]:
+        raise HTTPException(status_code=409, detail="A model download is active")
+
+    from services import anglenet
+    from services import detect as detect_service
+    from services import inpaint as inpaint_service
+    from services import ocr as ocr_service
+    from services.detect.base import _models_dir
+
+    target: Path | None = None
+    unload = None
+    for registry in (
+        detect_service.MODELS,
+        ocr_service.MODELS,
+        inpaint_service.MODELS,
+    ):
+        model = registry.get(req.modelId)
+        if model is None:
+            continue
+        if registry is ocr_service.MODELS:
+            target = model.model_dir
+        else:
+            target = model.model_path
+        unload = model.unload
+        break
+
+    if req.modelId == "anglenet":
+        target = anglenet.model_dir(_models_dir())
+        unload = anglenet.unload
+
+    if target is None or unload is None:
+        raise HTTPException(status_code=404, detail="Unknown model")
+
+    models_root = _models_dir().resolve()
+    resolved_target = target.resolve()
+    try:
+        resolved_target.relative_to(models_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid model path") from exc
+
+    unload()
+    if target.is_symlink():
+        target.unlink()
+    elif resolved_target.is_dir():
+        shutil.rmtree(resolved_target)
+    else:
+        resolved_target.unlink(missing_ok=True)
+
+    log.info(f"Removed downloaded model: {req.modelId}")
+    return {"status": "deleted", "modelId": req.modelId}
 
 
 def main():

@@ -29,12 +29,16 @@ import type { LogLevel } from "../logger";
 export interface LuminaAPI {
   importImage(): Promise<string | null>;
   importImages(): Promise<string[] | null>;
-  importImageFolder(): Promise<string[] | null>;
+  importImageFolder(): Promise<{
+    filePaths: string[];
+    folderName: string;
+  } | null>;
   apiPost<T = unknown>(endpoint: string, body: unknown): Promise<T>;
   getDevice(): Promise<DeviceInfo>;
   setUseGpu(useGpu: boolean): Promise<DeviceInfo>;
   checkModel(): Promise<ModelCheck>;
   downloadModel(models?: string[]): Promise<void>;
+  deleteModel(modelId: string): Promise<void>;
   cancelDownload(): Promise<void>;
   onDownloadProgress(cb: (msg: DownloadProgress) => void): void;
   getFonts(): Promise<FontInfo[]>;
@@ -67,6 +71,7 @@ export interface LuminaAPI {
   onUpdateProgress(cb: (msg: UpdateProgress) => void): void;
   openUpdateUrl(url: string): Promise<void>;
   getRuntimeStatus(): Promise<RuntimeInfo>;
+  cancelRuntime(): Promise<void>;
   onRuntimeProgress(cb: (msg: RuntimeProgress) => void): void;
   onRuntimeBusy(cb: (busy: boolean) => void): void;
   onCheckModel(cb: () => void): void;

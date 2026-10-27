@@ -52,11 +52,14 @@ export const pipeline = {
     await inpaint.run();
   },
   /** Run the given preset by id. */
-  async runPreset(id: PresetId): Promise<void> {
+  async runPreset(
+    id: PresetId,
+    options: { includeOcr?: boolean } = {},
+  ): Promise<void> {
     try {
       if (id === "clean") {
         await detection.runAll();
-        await ocr.runAll();
+        if (options.includeOcr !== false) await ocr.runAll();
         await inpaint.runAll();
         return;
       }

@@ -4,6 +4,7 @@ type TranslationData = Record<string, Record<string, string>>;
 
 let _lang: string = localStorage.getItem("lumina-lang") || "en";
 let _data: TranslationData = {};
+const _languageListeners = new Set<(code: string) => void>();
 
 function _interpolate(str: string, params?: Record<string, unknown>): string {
   if (!params) return str;
@@ -29,6 +30,12 @@ export function setLang(code: string): void {
   localStorage.setItem("lumina-lang", code);
   document.documentElement.lang = code;
   _renderAll();
+  for (const listener of _languageListeners) listener(code);
+}
+
+export function onLanguageChange(listener: (code: string) => void): () => void {
+  _languageListeners.add(listener);
+  return () => _languageListeners.delete(listener);
 }
 
 function _renderAll(): void {

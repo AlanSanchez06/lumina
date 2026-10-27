@@ -9,6 +9,7 @@ export const WINDOW_KEY = "lumina:exportWindow";
 
 export interface ExportState {
   order: Page[];
+  folderName: string;
   format: "png" | "jpg";
   quality: number;
   overlay: HTMLElement | null;
@@ -28,6 +29,7 @@ export interface ExportState {
 
 export const st: ExportState = {
   order: [],
+  folderName: "",
   format: "png",
   quality: 92,
   overlay: null,

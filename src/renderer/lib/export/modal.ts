@@ -105,6 +105,10 @@ export function buildModal(): void {
       </div>
       <div class="flex items-center justify-between px-4 py-3 border-t border-surface-3">
         <div class="export-controls">
+          <label class="export-folder-control">
+            <span data-i18n="export.folderName">Output folder</span>
+            <input id="export-folder-name" type="text" maxlength="120" value="">
+          </label>
           <div class="export-format" id="export-format">
             <button class="btn export-opt active" data-fmt="png" data-i18n="export.png">PNG</button>
             <button class="btn export-opt" data-fmt="jpg" data-i18n="export.jpg">JPG</button>
@@ -224,6 +228,10 @@ export function buildModal(): void {
   const slider = document.getElementById(
     "export-quality-slider",
   ) as HTMLInputElement | null;
+  const folderNameInput = document.getElementById(
+    "export-folder-name",
+  ) as HTMLInputElement | null;
+  if (folderNameInput) folderNameInput.value = st.folderName;
   const val = document.getElementById("export-quality-val");
   if (slider) {
     slider.addEventListener("input", function () {
@@ -283,6 +291,7 @@ function close(): void {
   st.previewCtx = null;
   st.previewImg = null;
   st.order = [];
+  st.folderName = "";
   st.selIdx = 0;
   st.dragIdx = null;
   st.zoom = 1;
@@ -291,6 +300,13 @@ function close(): void {
 }
 
 async function doExport(goBtn: HTMLButtonElement): Promise<void> {
+  const folderName = (
+    document.getElementById("export-folder-name") as HTMLInputElement | null
+  )?.value.trim();
+  if (!folderName) {
+    ui.toast(i18n.t("export.folderNameRequired"), "warn");
+    return;
+  }
   goBtn.disabled = true;
   const toast = ui.toast(i18n.t("export.running"), "running", 0);
   try {
@@ -304,6 +320,7 @@ async function doExport(goBtn: HTMLButtonElement): Promise<void> {
     const res: ExportResult = await window.lumina.exportImages({
       format: st.format,
       quality: st.quality,
+      folderName,
       files,
     });
     ui.dismissToast(toast);
